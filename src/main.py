@@ -111,7 +111,7 @@ def scrape_html_files(chromedriver: str) -> dict:
 
             # extract the HTML source and parse the source files
             html_source = browser.page_source
-            reviews[(first_name, last_name)] = parse_html(html_source)
+            reviews[f"{last_name},{first_name}"] = parse_html(html_source)
 
             # go back to table
             browser.switch_to.window(browser.window_handles[3])
@@ -182,17 +182,10 @@ def main():
     parser.add_argument("file_loc", type=str,
                         help="The location of the JSON file to save")
     args = parser.parse_args()
-
-    # load file into a string
-    # f = load_html(args.file_loc)
-    # l = parse_html(f)
-
-    # for review in l:
-    # print(review)
     review_dict = scrape_html_files("./chromedriver")
     j = json.dumps(review_dict)
 
-    with open(parser.file_loc) as f:
+    with open(str(args.file_loc), "w+") as f:
         f.write(j)
 
 
