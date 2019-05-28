@@ -11,9 +11,103 @@ from typing import List
 from pathlib import Path
 from bs4 import BeautifulSoup
 import argparse
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+from time import sleep
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 # The set of classes that need to be present for a valid "review"
 REVIEW_CLASSES: set = {"mPTDC", "TTHC", "mPTLC", "PTLC", "OOLT"}
+
+
+def scrape_html_files(chromedriver: str):
+    """ Using the chromedriver, go to the course assessment portal and extract
+    the HTML files for each Professor, saving the HTML in the desired directory.
+
+    Args:
+        - chromedriver: The path to the chromedriver executable. If this isn't
+          set, then the program will attempt to look for chromedriver in your
+          path.
+    """
+    browser = webdriver.Chrome(
+        executable_path=chromedriver, chrome_options=webdriver.ChromeOptions())
+    # Get security information so we can log in
+    username = os.environ["dart_username"]
+    password = os.environ["dart_password"]
+    auth = os.environ["dart_auth"]
+
+    # go to banner
+    browser.get('https://www.dartmouth.edu/bannerstudent/')
+
+    # input username
+    username_box = browser.find_element_by_id("userid")
+    username_box.send_keys(username)
+    submit_user = browser.find_element_by_class_name("loginButton")
+    submit_user.click()
+
+    # input password
+    password_box = browser.find_element_by_id("Bharosa_Password_PadDataField")
+    password_box.send_keys(password)
+    password_box.send_keys(Keys.ENTER)
+
+    # security question
+    auth_box = browser.find_element_by_id("Bharosa_Challenge_PadDataField")
+    auth_box.send_keys(auth)
+    auth_box.send_keys(Keys.ENTER)
+
+    # find course assessments
+    all_tiles = browser.find_element_by_id("all-tiles-category")
+    all_tiles.click()
+    portal = browser.find_element_by_link_text('Course Assessment Portal')
+    portal.click()
+
+    # get table of classes
+    instructor_names = list()
+    browser.switch_to_window(browser.window_handles[1])
+    tbody = WebDriverWait(browser, 10).until(
+        EC.presence_of_element_located((By.TAG_NAME, 'tbody')))
+    rows = WebDriverWait(tbody, 10).until(
+        EC.presence_of_all_elements_located((By.TAG_NAME, 'tr')))
+
+    for row in rows:
+        prof = row.find_element_by_xpath('./td[4]').text
+        print(prof)
+
+        # if a new prof is found
+        if prof not in instructor_names:
+            instructor_names.append(prof)
+
+            # open up reviews
+            faculty_page = row.find_element_by_xpath('./td[5]/span[2]/a')
+            faculty_page.click()
+            browser.switch_to_window(browser.window_handles[2])
+            sleep(2)
+
+            # save reviews as HTML
+            gear = WebDriverWait(browser, 10).until(
+                EC.presence_of_element_located((By.ID,
+                                                'uberBar_dashboardpageoptions')))
+            gear.click()
+            print_page = WebDriverWait(browser, 10).until(
+                EC.presence_of_element_located((By.ID, 'idPagePrint')))
+            print_page.click()
+            print_menu = WebDriverWait(browser, 10).until(
+                EC.presence_of_element_located((By.ID, "idDashboardPrintDisplayLayoutMenu")))
+            print_html_button = print_menu.find_element_by_xpath(
+                './table[0]/tbody[0]/tr[0]/td[0]/a[1]')
+            export_html = WebDriverWait(browser, 10).until(EC.presence_of_element_located((
+                By.ID,
+                'masterMenuItem NQWMenuItem NQWMenuItemWIconMixin')))
+            export_html.click()
+            sleep(2)
+
+            # go back to table
+            browser.close()
+            browser.switch_to_window(browser.window_handles[1])
+    browser.close()
+    browser.close()
 
 
 def load_html(path: str) -> str:
@@ -74,14 +168,15 @@ def main():
         description="Process HTML files with class review data")
     parser.add_argument("file_loc", type=str,
                         help="The location of the HTML file to parse")
-    args = parser.parse_args()
+    # args = parser.parse_args()
 
     # load file into a string
-    f = load_html(args.file_loc)
-    l = parse_html(f)
+    # f = load_html(args.file_loc)
+    # l = parse_html(f)
 
-    for review in l:
-        print(review)
+    # for review in l:
+    # print(review)
+    scrape_html_files("./chromedriver")
 
 
 if __name__ == "__main__":
