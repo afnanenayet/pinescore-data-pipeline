@@ -17,12 +17,13 @@ from selenium.webdriver.common.by import By
 from time import sleep
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+import json
 
 # The set of classes that need to be present for a valid "review"
 REVIEW_CLASSES: set = {"mPTDC", "TTHC", "mPTLC", "PTLC", "OOLT"}
 
 
-def scrape_html_files(chromedriver: str):
+def scrape_html_files(chromedriver: str) -> dict:
     """ Using the chromedriver, go to the course assessment portal and extract
     the HTML files for each Professor, saving the HTML in the desired directory.
 
@@ -63,9 +64,12 @@ def scrape_html_files(chromedriver: str):
     portal = browser.find_element_by_link_text('Course Assessment Portal')
     portal.click()
 
+    # dictionary of professor and corresponding comments
+    reviews = dict()
+
     # get table of classes
     instructor_names = list()
-    browser.switch_to_window(browser.window_handles[1])
+    browser.switch_to.window(browser.window_handles[1])
     tbody = WebDriverWait(browser, 10).until(
         EC.presence_of_element_located((By.TAG_NAME, 'tbody')))
     rows = WebDriverWait(tbody, 10).until(
@@ -73,17 +77,19 @@ def scrape_html_files(chromedriver: str):
 
     for row in rows:
         prof = row.find_element_by_xpath('./td[4]').text
-        print(prof)
 
         # if a new prof is found
         if prof not in instructor_names:
+            first_name = prof.split(",")[1].strip()
+            last_name = prof.split(",")[0].strip()
+            print(f"Scraping for Prof: {first_name} {last_name}")
             instructor_names.append(prof)
 
             # open up reviews
             faculty_page = row.find_element_by_xpath('./td[5]/span[2]/a')
             faculty_page.click()
-            browser.switch_to_window(browser.window_handles[2])
-            sleep(2)
+            browser.switch_to.window(browser.window_handles[2])
+            # sleep(2)
 
             # save reviews as HTML
             gear = WebDriverWait(browser, 10).until(
@@ -95,19 +101,26 @@ def scrape_html_files(chromedriver: str):
             print_page.click()
             print_menu = WebDriverWait(browser, 10).until(
                 EC.presence_of_element_located((By.ID, "idDashboardPrintDisplayLayoutMenu")))
-            print_html_button = print_menu.find_element_by_xpath(
-                './table[0]/tbody[0]/tr[0]/td[0]/a[1]')
-            export_html = WebDriverWait(browser, 10).until(EC.presence_of_element_located((
-                By.ID,
-                'masterMenuItem NQWMenuItem NQWMenuItemWIconMixin')))
-            export_html.click()
-            sleep(2)
+            print_html_button = WebDriverWait(browser, 10).until(
+                EC.presence_of_element_located((
+                    By.CSS_SELECTOR,
+                    "#idDashboardPrintDisplayLayoutMenu > table > tbody > " +
+                    "tr:nth-child(1) > td.masterMenu.shadowMenuCell > " +
+                    "a:nth-child(2)")))
+            print_html_button.click()
+
+            # extract the HTML source and parse the source files
+            html_source = browser.page_source
+            reviews[[first_name, last_name]] = parse_html(html_source)
 
             # go back to table
+            browser.switch_to.window(browser.window_handles[3])
             browser.close()
-            browser.switch_to_window(browser.window_handles[1])
+            browser.switch_to.window(browser.window_handles[2])
+            browser.close()
+            browser.switch_to.window(browser.window_handles[1])
     browser.close()
-    browser.close()
+    return reviews
 
 
 def load_html(path: str) -> str:
@@ -167,8 +180,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Process HTML files with class review data")
     parser.add_argument("file_loc", type=str,
-                        help="The location of the HTML file to parse")
-    # args = parser.parse_args()
+                        help="The location of the JSON file to save")
+    args = parser.parse_args()
 
     # load file into a string
     # f = load_html(args.file_loc)
@@ -176,7 +189,11 @@ def main():
 
     # for review in l:
     # print(review)
-    scrape_html_files("./chromedriver")
+    review_dict = scrape_html_files("./chromedriver")
+    j = json.dumps(review_dict)
+
+    with open(parser.file_loc) as f:
+        f.write(j)
 
 
 if __name__ == "__main__":
