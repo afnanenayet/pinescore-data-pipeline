@@ -111,7 +111,7 @@ def scrape_html_files(chromedriver: str) -> dict:
 
             # extract the HTML source and parse the source files
             html_source = browser.page_source
-            reviews[[first_name, last_name]] = parse_html(html_source)
+            reviews[(first_name, last_name)] = parse_html(html_source)
 
             # go back to table
             browser.switch_to.window(browser.window_handles[3])
